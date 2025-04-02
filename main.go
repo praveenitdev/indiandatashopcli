@@ -18,6 +18,7 @@ import (
 
 const (
 	apiURL        = "https://indiandata.shop/search.php"
+	creditsURL    = "https://indiandata.shop/credits.php"
 	configFile    = "INDIAN_DATA_SHOP_CONFIG"
 	defaultAPIKey = ""
 )
@@ -41,6 +42,10 @@ type Person struct {
 type Config struct {
 	APIKey      string `json:"api_key"`
 	DisplayType string `json:"display_type"`
+}
+
+type CreditResponse struct {
+	Credits string `json:"credits"`
 }
 
 func loadConfig() (*Config, error) {
@@ -147,8 +152,42 @@ func PrintPeopleTablev2(people []Person) {
 	}
 	w.Flush()
 }
+
+func fetchCredits(apiKey string) {
+	req, err := http.NewRequest("POST", creditsURL, nil)
+	if err != nil {
+		fmt.Println("Error creating request:", err)
+		os.Exit(1)
+	}
+
+	req.Header.Set("API_KEY", apiKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error sending request:", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading response:", err)
+		os.Exit(1)
+	}
+
+	var creditResp CreditResponse
+	if err := json.Unmarshal(body, &creditResp); err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return
+	}
+
+	fmt.Printf("Available Credits: %s\n", creditResp.Credits)
+}
+
 func main() {
 	configureFlag := flag.Bool("configure", false, "Run configuration")
+	creditsFlag := flag.Bool("credits", false, "Check available credits")
 	searchType := flag.String("type", "", "Type of search (email, mobile, aadhar)")
 	query := flag.String("query", "", "Search input")
 	masked := flag.Bool("masked", false, "Masked result (true/false)")
@@ -159,7 +198,18 @@ func main() {
 		return
 	}
 
+	if *creditsFlag {
+		cfg, err := loadConfig()
+		if err != nil {
+			fmt.Println("Error loading config. Run with --configure first.")
+			os.Exit(1)
+		}
+		fetchCredits(cfg.APIKey)
+		return
+	}
+
 	args := flag.Args()
+
 	if len(args) == 2 {
 		*searchType = args[0]
 		*query = args[1]
