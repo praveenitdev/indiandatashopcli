@@ -186,94 +186,97 @@ func fetchCredits(apiKey string) {
 }
 
 func main() {
-	configureFlag := flag.Bool("configure", false, "Run configuration")
-	creditsFlag := flag.Bool("credits", false, "Check available credits")
-	searchType := flag.String("type", "", "Type of search (email, mobile, aadhar)")
-	query := flag.String("query", "", "Search input")
-	masked := flag.Bool("masked", false, "Masked result (true/false)")
 	flag.Parse()
+	args := flag.Args()
 
-	if *configureFlag {
-		configure()
-		return
+	if len(args) < 1 {
+		fmt.Println("Usage: ./indiandata <action> [options]")
+		fmt.Println("Actions: configure, credits, search")
+		os.Exit(1)
 	}
 
-	if *creditsFlag {
+	action := args[0]
+
+	switch action {
+	case "configure":
+		configure()
+		return
+
+	case "credits":
 		cfg, err := loadConfig()
 		if err != nil {
-			fmt.Println("Error loading config. Run with --configure first.")
+			fmt.Println("Error loading config. Run with 'configure' first.")
 			os.Exit(1)
 		}
 		fetchCredits(cfg.APIKey)
 		return
-	}
 
-	args := flag.Args()
+	case "search":
+		if len(args) < 3 {
+			fmt.Println("Usage: ./indiandata search <type> <query> [masked]")
+			os.Exit(1)
+		}
 
-	if len(args) == 2 {
-		*searchType = args[0]
-		*query = args[1]
-	}
+		searchType := args[1]
+		query := args[2]
+		masked := false
+		if len(args) == 4 {
+			masked = args[3] == "true"
+		}
 
-	if len(args) == 3 {
-		*searchType = args[0]
-		*query = args[1]
-		*masked = args[2] == "true"
-	}
+		cfg, err := loadConfig()
+		if err != nil {
+			fmt.Println("Error loading config. Run with 'configure' first.")
+			os.Exit(1)
+		}
 
-	if *searchType == "" || *query == "" {
-		fmt.Println("Usage: ./indiandata [--masked] [--type <type> --query <query>] or ./indiandata <type> <query> <masked>")
+		form := url.Values{}
+		form.Set("type", searchType)
+		form.Set("query", query)
+		form.Set("masked", fmt.Sprintf("%v", masked))
+
+		req, err := http.NewRequest("POST", apiURL, bytes.NewBufferString(form.Encode()))
+		if err != nil {
+			fmt.Println("Error creating request:", err)
+			os.Exit(1)
+		}
+
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("API_KEY", cfg.APIKey)
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println("Error sending request:", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("Error reading response:", err)
+			os.Exit(1)
+		}
+
+		var apiResp ApiResponse
+		if err := json.Unmarshal(body, &apiResp); err != nil {
+			fmt.Println("Error parsing JSON:", err)
+			return
+		}
+
+		if len(apiResp.Persons) == 0 {
+			fmt.Println("No results found.")
+			return
+		}
+
+		if cfg.DisplayType == "PLAIN" {
+			PrintPeopleTablev2(apiResp.Persons)
+		} else {
+			PrintPeopleTable(apiResp.Persons)
+		}
+
+	default:
+		fmt.Println("Invalid action. Use 'configure', 'credits', or 'search'.")
 		os.Exit(1)
-	}
-
-	cfg, err := loadConfig()
-	if err != nil {
-		fmt.Println("Error loading config. Run with --configure first.")
-		os.Exit(1)
-	}
-
-	form := url.Values{}
-	form.Set("type", *searchType)
-	form.Set("query", *query)
-	form.Set("masked", fmt.Sprintf("%v", *masked))
-
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBufferString(form.Encode()))
-	if err != nil {
-		fmt.Println("Error creating request:", err)
-		os.Exit(1)
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("API_KEY", cfg.APIKey)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println("Error sending request:", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println("Error reading response:", err)
-		os.Exit(1)
-	}
-
-	var apiResp ApiResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		fmt.Println("Error parsing JSON:", err)
-		return
-	}
-
-	if len(apiResp.Persons) == 0 {
-		fmt.Println("No results found.")
-		return
-	}
-
-	if cfg.DisplayType == "PLAIN" {
-		PrintPeopleTablev2(apiResp.Persons)
-	} else {
-		PrintPeopleTable(apiResp.Persons)
 	}
 }
