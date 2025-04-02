@@ -147,7 +147,6 @@ func PrintPeopleTablev2(people []Person) {
 	}
 	w.Flush()
 }
-
 func main() {
 	configureFlag := flag.Bool("configure", false, "Run configuration")
 	searchType := flag.String("type", "", "Type of search (email, mobile, aadhar)")
@@ -160,15 +159,26 @@ func main() {
 		return
 	}
 
-	cfg, err := loadConfig()
-	if err != nil {
-		fmt.Println("Error loading config. Run with --configure first.")
-		os.Exit(1)
+	args := flag.Args()
+	if len(args) == 2 {
+		*searchType = args[0]
+		*query = args[1]
+	}
+
+	if len(args) == 3 {
+		*searchType = args[0]
+		*query = args[1]
+		*masked = args[2] == "true"
 	}
 
 	if *searchType == "" || *query == "" {
-		fmt.Println("Error: --type and --query are required.")
-		flag.Usage()
+		fmt.Println("Usage: ./indiandata [--masked] [--type <type> --query <query>] or ./indiandata <type> <query> <masked>")
+		os.Exit(1)
+	}
+
+	cfg, err := loadConfig()
+	if err != nil {
+		fmt.Println("Error loading config. Run with --configure first.")
 		os.Exit(1)
 	}
 
