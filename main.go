@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
@@ -19,7 +20,8 @@ import (
 const (
 	apiURL        = "https://indiandata.shop/search.php"
 	creditsURL    = "https://indiandata.shop/credits.php"
-	configFile    = "INDIAN_DATA_SHOP_CONFIG"
+	configDir     = ".indianDataShop/Config"
+	configFile    = "config.json"
 	defaultAPIKey = ""
 )
 
@@ -48,8 +50,21 @@ type CreditResponse struct {
 	Credits string `json:"credits"`
 }
 
+func getConfigPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, configDir, configFile), nil
+}
+
 func loadConfig() (*Config, error) {
-	data, err := ioutil.ReadFile(configFile)
+	configPath, err := getConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
@@ -59,11 +74,21 @@ func loadConfig() (*Config, error) {
 }
 
 func saveConfig(cfg *Config) error {
+	configPath, err := getConfigPath()
+	if err != nil {
+		return err
+	}
+
+	configDirPath := filepath.Dir(configPath)
+	if err := os.MkdirAll(configDirPath, 0755); err != nil {
+		return err
+	}
+
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(configFile, data, 0644)
+	return ioutil.WriteFile(configPath, data, 0644)
 }
 
 func configure() {
